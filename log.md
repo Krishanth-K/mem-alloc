@@ -20,3 +20,19 @@ dont share it
 
 ## Day 2 - 2026-01-10
 
+### Progress
+- Added the block header and page header structs
+
+
+## Day 3 - 2026-01-11
+
+Im ditching the page header. Its too complex for now. 
+Ill just stick to only block header and a single page for now
+
+Implemented malloc properly.
+Malloc can now choose a block if it has space, and then split the space for a new block (if there is enough minimum space for it).
+
+### Issues
+1. All blocks are tracked in teh free list now, need to optimizse that
+
+
