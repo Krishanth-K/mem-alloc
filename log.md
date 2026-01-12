@@ -17,12 +17,14 @@ dont share it
 #### Solution
 - Request a single page from OS, and manage it manually.
 
+---
 
 ## Day 2 - 2026-01-10
 
 ### Progress
 - Added the block header and page header structs
 
+---
 
 ## Day 3 - 2026-01-11
 
@@ -36,3 +38,14 @@ Malloc can now choose a block if it has space, and then split the space for a ne
 1. All blocks are tracked in teh free list now, need to optimizse that
 
 
+---
+
+## Day 4 - 2026-01-12
+
+Starting "free" now. 
+I need to add a "magic number" to each header, so that i can find if a pointer was malloc'ed 
+or created in the stack. I should only free pointers that were malloc'ed
+
+### Decision
+Switching to a doubly linked list, for better coalesing
+Can switch to a footer for free blocks later

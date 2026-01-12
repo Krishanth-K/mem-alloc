@@ -1,6 +1,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
@@ -8,6 +9,7 @@
 
 struct block_header *free_list = NULL;
 const int MIN_HEADER_SIZE = 8;
+const size_t BLOCK_MAGIC = 0xDEADBEEF;
 
 // header with metadata for the memory block
 typedef struct block_header
@@ -15,6 +17,7 @@ typedef struct block_header
 	size_t size;
 	bool is_free;
 	struct block_header *next_block;
+	size_t magic;
 
 } block_header;
 
@@ -31,6 +34,7 @@ void initHeap()
 	header->next_block = NULL;
 	header->is_free = true;
 	header->size = getpagesize() - sizeof(struct block_header);
+	header->magic = BLOCK_MAGIC;
 
 	free_list = header;
 }
@@ -74,6 +78,7 @@ void *_malloc(size_t length)
 			current->next_block = header;
 
 			header->is_free = true;
+			header->magic = BLOCK_MAGIC;
 
 			header->size = remaining - sizeof(block_header);
 			current->size = length;
@@ -92,28 +97,52 @@ void *_malloc(size_t length)
 	return (void *)(current + 1);
 }
 
+//
+// TODO: handle cases to free pointers in the middle of the array or
+// data section
+// TODO: Merge with adjacent free blocks
+void _free(void *data)
+{
+	if (!data)
+		return;
+
+	struct block_header *header = (struct block_header *)data - 1;
+
+	if (header->magic != BLOCK_MAGIC)
+	{
+		fprintf(stderr, "[ERROR]: Invalid pointer or corrupted block\n");
+		abort();
+	}
+
+	if (header->is_free)
+	{
+		fprintf(stderr, "[WARN]: Double free detected\n");
+		return;
+	}
+
+	header->is_free = true;
+}
+
 int main()
 {
-	printf("Page size: %d\n", getpagesize());
-
+	printf("=== Testing malloc ===\n");
 	void *p1 = _malloc(64);
 	void *p2 = _malloc(128);
-	void *p3 = _malloc(256);
+	printf("p1: %p, p2: %p\n", p1, p2);
 
-	printf("p1: %p\n", p1);
-	printf("p2: %p\n", p2);
+	printf("\n=== Testing free and reuse ===\n");
+	_free(p1);
+	printf("Freed p1\n");
+
+	void *p3 = _malloc(64);
 	printf("p3: %p\n", p3);
+	printf("p1 == p3? %s (should be YES)\n", p1 == p3 ? "YES" : "NO");
 
-	printf("p2 - p1 = %ld (expect ~%zu)\n", (char *)p2 - (char *)p1,
-	       64 + sizeof(block_header));
-	printf("p3 - p2 = %ld (expect ~%zu)\n", (char *)p3 - (char *)p2,
-	       128 + sizeof(block_header));
+	printf("\n=== Testing double free ===\n");
+	_free(p3);
+	_free(p3); // Should print warning
 
-	// Try writing to them
-	*((int *)p1) = 42;
-	*((int *)p2) = 100;
-	*((int *)p3) = 999;
-
-	printf("Written values: %d, %d, %d\n", *((int *)p1), *((int *)p2),
-	       *((int *)p3));
+	printf("\n=== Testing invalid pointer ===\n");
+	char *invalid = (char *)p2 + 50;
+	_free(invalid); // Should abort with error
 }
