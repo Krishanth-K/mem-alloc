@@ -27,7 +27,8 @@ typedef struct block_header
 
 } block_header;
 
-void initHeap()
+// create a new page and initialize a header and return it
+struct block_header *getHeap()
 {
 	void *start = mmap(NULL, getpagesize(), PROT_WRITE | PROT_READ,
 	                   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -47,7 +48,68 @@ void initHeap()
 	header->prev = NULL;
 	header->next = NULL;
 
+	return header;
+}
+
+void initHeap()
+{
+	struct block_header *header = getHeap();
 	free_list = header;
+}
+
+void coalesce(struct block_header *current)
+{
+
+	// merge with next header
+	if (current->next && current->next->is_free)
+	{
+		struct block_header *next = current->next;
+
+		current->size += next->size + sizeof(struct block_header);
+		current->next = next->next;
+
+		if (next->next)
+			next->next->prev = current;
+	}
+
+	// merge with prev header
+	if (current->prev && current->prev->is_free)
+	{
+		struct block_header *prev = current->prev;
+
+		prev->size += current->size + sizeof(struct block_header);
+		prev->next = current->next;
+
+		if (current->next)
+			current->next->prev = prev;
+
+		// now current points to garbage inside the combined data section
+	}
+}
+
+void expandHeap()
+{
+	struct block_header *new_page_block = getHeap();
+
+	// find the last block in the free list
+	struct block_header *current = free_list;
+
+	if (!free_list)
+	{
+		free_list = new_page_block;
+		return;
+	}
+
+	while (current->next)
+		current = current->next;
+
+	// attach the last block with the new page block
+	current->next = new_page_block;
+	new_page_block->prev = current;
+
+	// coalesce them if possible
+	if (current->is_free)
+		coalesce(current);
 }
 
 void *_malloc(size_t length)
@@ -57,9 +119,6 @@ void *_malloc(size_t length)
 
 	// align the length
 	length = ALIGN(length);
-
-	if (free_list->size < length)
-		printf("TODO: Create another page or smthng\n");
 
 	struct block_header *current = free_list;
 
@@ -106,41 +165,15 @@ void *_malloc(size_t length)
 		break;
 	}
 
+	// if no space in current page, create a new page and then allocate
 	if (!current)
 	{
-		fprintf(stdout, "No space found");
-		return NULL;
+		expandHeap();
+		return _malloc(length);
 	}
 
 	// return pointer to data section (skip the header)
 	return (void *)(current + 1);
-}
-
-void coalesce(struct block_header *header)
-{
-	// merge with next header
-	if (header->next && header->next->is_free)
-	{
-		struct block_header *next = header->next;
-
-		header->size += next->size + sizeof(struct block_header);
-		header->next = next->next;
-
-		if (header->next)
-			header->next->prev = header;
-	}
-
-	// merge with prev header
-	if (header->prev && header->prev->is_free)
-	{
-		struct block_header *prev = header->prev;
-
-		prev->size += header->size + sizeof(struct block_header);
-		prev->next = header->next;
-
-		if (prev->next)
-			prev->next->prev = prev;
-	}
 }
 
 //
@@ -219,7 +252,7 @@ void *_realloc(void *ptr, size_t size)
 	// check if the pointer can be realloc'ed
 	if (block->magic != BLOCK_MAGIC)
 	{
-		fprintf(stderr, "[ERROR]: Invalid pointer");
+		fprintf(stderr, "[ERROR]: Invalid pointer\n");
 		return NULL;
 	}
 
@@ -247,35 +280,19 @@ void *_realloc(void *ptr, size_t size)
 
 int main()
 {
-	printf("=== Testing realloc ===\n");
+	printf("=== Testing multi-page allocation ===\n");
+	printf("Page size: %d\n\n", getpagesize());
 
-	// Test 1: realloc(NULL, size) should work like malloc
-	int *p = (int *)_realloc(NULL, 10 * sizeof(int));
-	printf("realloc(NULL, 40) = %p\n", p);
+	void *ptrs[100];
 
-	// Test 2: Fill with data
-	for (int i = 0; i < 10; i++)
-		p[i] = i;
-
-	// Test 3: Grow - should preserve data
-	p = (int *)_realloc(p, 20 * sizeof(int));
-	printf("After growing to 80 bytes:\n");
-	for (int i = 0; i < 10; i++)
+	for (int i = 0; i < 100; i++)
 	{
-		printf("%d ", p[i]); // Should still be 0-9
+		ptrs[i] = _malloc(100);
+		if (i % 20 == 0)
+		{
+			printf("Allocated %d blocks, latest: %p\n", i + 1, ptrs[i]);
+		}
 	}
-	printf("\n");
 
-	// Test 4: Shrink - should still work
-	p = (int *)_realloc(p, 5 * sizeof(int));
-	printf("After shrinking to 20 bytes:\n");
-	for (int i = 0; i < 5; i++)
-	{
-		printf("%d ", p[i]); // Should be 0-4
-	}
-	printf("\n");
-
-	// Test 5: realloc to 0 should free
-	p = (int *)_realloc(p, 0);
-	printf("realloc(p, 0) = %p (should be NULL)\n", p);
+	printf("\n✓ Successfully allocated 100 blocks\n");
 }

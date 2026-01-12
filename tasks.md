@@ -13,13 +13,13 @@
   - [x] Zero-initialize with `memset`
   - [x] Test with array allocation
 
-- [ ] Implement `_realloc(void *ptr, size_t new_size)`
-  - [ ] Handle NULL pointer (redirect to malloc)
-  - [ ] Handle zero size (free and return NULL)
-  - [ ] Validate pointer with magic number
-  - [ ] Check if current block is large enough
-  - [ ] If not, allocate new block, copy data, free old
-  - [ ] Test growing and shrinking allocations
+- [x] Implement `_realloc(void *ptr, size_t new_size)`
+  - [x] Handle NULL pointer (redirect to malloc)
+  - [x] Handle zero size (free and return NULL)
+  - [x] Validate pointer with magic number
+  - [x] Check if current block is large enough
+  - [x] If not, allocate new block, copy data, free old
+  - [x] Test growing and shrinking allocations
 
 ### **Phase 3: Multi-Page Support**
 - [ ] Implement `expand_heap()` function
