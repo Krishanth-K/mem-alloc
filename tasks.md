@@ -1,10 +1,10 @@
 ## MEMORY ALLOCATOR - REMAINING TASKS
 
 ### **Phase 1: Core Fixes (Critical)**
-- [ ] Add alignment macro definitions (`ALIGN`, `ALIGN_UP`)
-- [ ] Implement alignment in `_malloc` (round up allocation sizes)
-- [ ] Test alignment with unaligned requests (e.g., 5 bytes)
-- [ ] Verify all returned pointers are 8-byte aligned
+- [x] Add alignment macro definitions (`ALIGN`, `ALIGN_UP`)
+- [x] Implement alignment in `_malloc` (round up allocation sizes)
+- [x] Test alignment with unaligned requests (e.g., 5 bytes)
+- [x] Verify all returned pointers are 8-byte aligned
 
 ### **Phase 2: Standard Library Functions**
 - [ ] Implement `_calloc(size_t nmemb, size_t size)`

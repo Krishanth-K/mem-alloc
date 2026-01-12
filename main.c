@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
@@ -145,7 +146,6 @@ void coalesce(struct block_header *header)
 //
 // TODO: handle cases to free pointers in the middle of the array or
 // data section
-// TODO: Merge with adjacent free blocks
 void _free(void *data)
 {
 	if (!data)
@@ -168,6 +168,32 @@ void _free(void *data)
 	header->is_free = true;
 
 	coalesce(header);
+}
+
+void *_calloc(size_t num, size_t size)
+{
+	size_t total = num * size;
+
+	// check for overflow
+	if (num != 0 && total / num != size)
+	{
+		fprintf(stderr, "[ERROR]: Integer overflow during calloc\n");
+		return NULL;
+	}
+
+	// initialize the memory
+	void *data = _malloc(total);
+
+	if (!data)
+	{
+		fprintf(stderr, "[ERROR]: _malloc failed!\n");
+		return NULL;
+	}
+
+	// set initial values to 0
+	memset(data, 0, total);
+
+	return data;
 }
 
 int main()
