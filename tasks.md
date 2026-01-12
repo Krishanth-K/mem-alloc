@@ -7,11 +7,11 @@
 - [x] Verify all returned pointers are 8-byte aligned
 
 ### **Phase 2: Standard Library Functions**
-- [ ] Implement `_calloc(size_t nmemb, size_t size)`
-  - [ ] Add overflow check
-  - [ ] Allocate memory using `_malloc`
-  - [ ] Zero-initialize with `memset`
-  - [ ] Test with array allocation
+- [x] Implement `_calloc(size_t nmemb, size_t size)`
+  - [x] Add overflow check
+  - [x] Allocate memory using `_malloc`
+  - [x] Zero-initialize with `memset`
+  - [x] Test with array allocation
 
 - [ ] Implement `_realloc(void *ptr, size_t new_size)`
   - [ ] Handle NULL pointer (redirect to malloc)

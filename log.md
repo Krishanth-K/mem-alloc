@@ -48,6 +48,14 @@ or created in the stack. I should only free pointers that were malloc'ed
 
 BOOM. Added colescing (whatever its called). 
 
+Added calloc. it was very simple, cause i already have _malloc
+
+### Progress
+- Implemented free
+- Implemented calloc
+- Added alignment
+
+
 ### Decision
 Switching to a doubly linked list, for better coalesing
 Can switch to a footer for free blocks later

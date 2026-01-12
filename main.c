@@ -196,55 +196,86 @@ void *_calloc(size_t num, size_t size)
 	return data;
 }
 
+// create a new space in memory for "size" bytes and then copy the content
+// over from "ptr"
+void *_realloc(void *ptr, size_t size)
+{
+	size = ALIGN(size);
+
+	// explicitly allowed
+	if (!ptr)
+		return _malloc(size);
+
+	// a valid pointer and a size == 0 is equivalent to free(ptr)
+	if (size == 0)
+	{
+		_free(ptr);
+		return NULL;
+	}
+
+	struct block_header *block = (struct block_header *)ptr - 1;
+	size_t current_size = block->size;
+
+	// check if the pointer can be realloc'ed
+	if (block->magic != BLOCK_MAGIC)
+	{
+		fprintf(stderr, "[ERROR]: Invalid pointer");
+		return NULL;
+	}
+
+	// if current block is big enough, return it
+	if (current_size > size)
+		return ptr;
+
+	// allocate the space and verify if it worked
+	void *new_ptr = _malloc(size);
+	if (!new_ptr)
+	{
+		fprintf(stderr, "[ERROR]: _malloc failed!\n");
+		return NULL;
+	}
+
+	// copy the contents from ptr to new_ptr
+	size_t min_size = current_size < size ? current_size : size;
+	memcpy(new_ptr, ptr, min_size);
+
+	// free the original memory
+	_free(ptr);
+
+	return new_ptr;
+}
+
 int main()
 {
-	printf("=== Testing coalescing ===\n");
-	printf("Page size: %d\n", getpagesize());
+	printf("=== Testing realloc ===\n");
 
-	// Allocate 3 adjacent blocks
-	void *p1 = _malloc(64);
-	void *p2 = _malloc(64);
-	void *p3 = _malloc(64);
+	// Test 1: realloc(NULL, size) should work like malloc
+	int *p = (int *)_realloc(NULL, 10 * sizeof(int));
+	printf("realloc(NULL, 40) = %p\n", p);
 
-	printf("Allocated:\n");
-	printf("  p1=%p\n", p1);
-	printf("  p2=%p\n", p2);
-	printf("  p3=%p\n", p3);
+	// Test 2: Fill with data
+	for (int i = 0; i < 10; i++)
+		p[i] = i;
 
-	// Free middle block
-	_free(p2);
-	printf("\nFreed p2\n");
-
-	// Free first block - should merge with p2
-	_free(p1);
-	printf("Freed p1 (should merge with p2)\n");
-
-	// Now allocate 150 bytes - should fit in merged block
-	void *p4 = _malloc(150);
-	printf("\nAllocated p4=%p (150 bytes)\n", p4);
-
-	if (p4 == p1)
+	// Test 3: Grow - should preserve data
+	p = (int *)_realloc(p, 20 * sizeof(int));
+	printf("After growing to 80 bytes:\n");
+	for (int i = 0; i < 10; i++)
 	{
-		printf("✓ SUCCESS: Coalescing works! p4 reused merged p1+p2 block\n");
+		printf("%d ", p[i]); // Should still be 0-9
 	}
-	else
-	{
-		printf("✗ FAIL: p4=%p, p1=%p - blocks didn't merge\n", p4, p1);
-	}
+	printf("\n");
 
-	// Test full coalescing
-	_free(p3);
-	_free(p4);
-	printf("\nFreed p3 and p4 - all blocks should merge\n");
+	// Test 4: Shrink - should still work
+	p = (int *)_realloc(p, 5 * sizeof(int));
+	printf("After shrinking to 20 bytes:\n");
+	for (int i = 0; i < 5; i++)
+	{
+		printf("%d ", p[i]); // Should be 0-4
+	}
+	printf("\n");
 
-	// Should be able to allocate almost the entire page now
-	void *big = _malloc(3800);
-	if (big)
-	{
-		printf("✓ SUCCESS: Allocated 3800 bytes after full coalesce\n");
-	}
-	else
-	{
-		printf("✗ FAIL: Couldn't allocate 3800 bytes\n");
-	}
+	// Test 5: realloc to 0 should free
+	p = (int *)_realloc(p, 0);
+	printf("realloc(p, 0) = %p (should be NULL)\n", p);
 }
