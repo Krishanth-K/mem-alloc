@@ -1,17 +1,26 @@
+BUILD_DIR := build
+TARGET    := $(BUILD_DIR)/hex-dump
 
-.PHONY: all compile run clean debug
+.PHONY: all configure build run clean rebuild
 
 all: run
 
-compile:
-	cc -g main.c
+configure:
+	mkdir -p $(BUILD_DIR)
+	cd $(BUILD_DIR) && cmake ..
 
-run: compile
-	./a.out
+build: configure
+	cd $(BUILD_DIR) && cmake --build .
 
-debug: compile
-	gdb ./a.out
+run: build
+	clear && $(TARGET)
+
+runnoc: build
+	$(TARGET)
 
 clean:
-	rm a.out
+	rm -rf $(BUILD_DIR)
+
+rebuild: clean all
+
 
