@@ -22,15 +22,15 @@
   - [x] Test growing and shrinking allocations
 
 ### **Phase 3: Multi-Page Support**
-- [ ] Implement `expand_heap()` function
-  - [ ] Request new page via `mmap`
-  - [ ] Initialize new block header
-  - [ ] Find last block in current heap
-  - [ ] Link new page to existing heap
-  - [ ] Update prev/next pointers
-- [ ] Modify `_malloc` to call `expand_heap()` when out of memory
-- [ ] Test allocating more than 4KB total
-- [ ] Verify multiple pages are linked correctly
+- [] Implement `expand_heap()` function
+  - [x] Request new page via `mmap`
+  - [x] Initialize new block header
+  - [x] Find last block in current heap
+  - [x] Link new page to existing heap
+  - [x] Update prev/next pointers
+- [x] Modify `_malloc` to call `expand_heap()` when out of memory
+- [x] Test allocating more than 4KB total
+- [x] Verify multiple pages are linked correctly
 
 ### **Phase 4: Testing & Validation**
 - [ ] Create comprehensive test suite

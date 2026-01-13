@@ -52,7 +52,7 @@ Added calloc. it was very simple, cause i already have _malloc
 
 `PAIN`
 Ahhhhh spent 2+ trying to debug a segfult. no progress
-the segfault happens when i try to test the realloc. commenting out the *coalesce()* in the
+the segfault happens when i try to test the expandPage. commenting out the *coalesce()* in the
 realloc function seems to solve it. 
 
 ### Progress
@@ -86,3 +86,9 @@ But that was wrong
 
 I tried to merge two blocks from non-adjacent pages, leading to UB. The fix was to check
 if the pages are adjacent before trying to colaesce them
+
+
+### Progress
+- Fixed the segfault while adding a new page
+- Abstracted the files
+- Added cmake to build and run the files
