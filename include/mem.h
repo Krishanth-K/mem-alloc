@@ -40,9 +40,6 @@ void coalesce(struct block_header *current);
 
 void validate_list(void);
 
-struct block_header *findNextFreeBlock(struct block_header *current);
-struct block_header *findPrevFreeBlock(struct block_header *current);
-
 void *_malloc(size_t length);
 void _free(void *data);
 void *_calloc(size_t num, size_t size);

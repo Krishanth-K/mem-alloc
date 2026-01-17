@@ -11,10 +11,55 @@
 // data section
 
 struct block_header *block_list = NULL;
+struct block_header *free_list = NULL;
 
 const int MIN_HEADER_SIZE = 8;
 const size_t BLOCK_MAGIC = 0xDEADBEEF;
 const size_t ALIGNED_BLOCK_SIZE = ALIGN(sizeof(struct block_header));
+
+// Helper: Insert block at the head of the free list
+void addToFreeList(struct block_header *block)
+{
+	if (!block->is_free)
+	{
+		fprintf(stderr, "[ERROR] addToFreeList called on allocated block\n");
+		return;
+	}
+
+	block->next_free = free_list;
+	block->prev_free = NULL;
+
+	if (free_list)
+	{
+		free_list->prev_free = block;
+	}
+
+	free_list = block;
+}
+
+// Helper: Remove block from the free list
+void removeFromFreeList(struct block_header *block)
+{
+	if (!block)
+		return;
+
+	if (block->prev_free)
+	{
+		block->prev_free->next_free = block->next_free;
+	}
+	else
+	{
+		free_list = block->next_free;
+	}
+
+	if (block->next_free)
+	{
+		block->next_free->prev_free = block->prev_free;
+	}
+
+	block->next_free = NULL;
+	block->prev_free = NULL;
+}
 
 // create a new page and initialize a header and return it
 struct block_header *getHeap(size_t size)
@@ -27,7 +72,7 @@ struct block_header *getHeap(size_t size)
 
 	void *start = mmap(NULL, total_size, PROT_WRITE | PROT_READ,
 	                   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-	printf("DEBUG: mmap returned %p\n", start);
+	// printf("DEBUG: mmap returned %p\n", start);
 
 	if (start == MAP_FAILED)
 	{
@@ -42,9 +87,11 @@ struct block_header *getHeap(size_t size)
 	header->magic = BLOCK_MAGIC;
 
 	header->prev = NULL;
-	header->prev_free = NULL;
 	header->next = NULL;
+
+	// Initialize free pointers but don't add to list yet (caller does it)
 	header->next_free = NULL;
+	header->prev_free = NULL;
 
 	return header;
 }
@@ -54,19 +101,23 @@ void initHeap(void)
 	size_t page_size = sysconf(_SC_PAGESIZE);
 	struct block_header *header = getHeap(page_size);
 	block_list = header;
+
+	// Add initial block to free list
+	addToFreeList(header);
 }
 
 void coalesce(struct block_header *current)
 {
-	// merge with next header
-	//
-	// Check if the two blocks are adjacent in memory before combining them
-	//
+	// MERGE WITH NEXT
+	// Check if the next block exists, is free, and is physically adjacent
 	if (current->next && current->next->is_free &&
 	    (char *)current + ALIGNED_BLOCK_SIZE + current->size ==
 	        (char *)current->next)
 	{
 		struct block_header *next_block = current->next;
+
+		// IMPORTANT: Remove the absorbed block from the free list first
+		removeFromFreeList(next_block);
 
 		current->size += next_block->size + ALIGNED_BLOCK_SIZE;
 		current->next = next_block->next;
@@ -74,20 +125,19 @@ void coalesce(struct block_header *current)
 		if (next_block->next)
 			next_block->next->prev = current;
 
-		current->next_free = next_block->next_free;
-		if (next_block->next_free)
-			next_block->next_free->prev_free = current;
+		// next_block is now garbage
 	}
 
-	// merge with prev header
-	//
-	// Check if the two blocks are adjacent in memory before combining them
-	//
+	// MERGE WITH PREV
+	// Check if the prev block exists, is free, and is physically adjacent
 	if (current->prev && current->prev->is_free &&
 	    (char *)current->prev + ALIGNED_BLOCK_SIZE + current->prev->size ==
 	        (char *)current)
 	{
 		struct block_header *prev_block = current->prev;
+
+		// IMPORTANT: Remove the absorbed block (current) from the free list
+		removeFromFreeList(current);
 
 		prev_block->size += current->size + ALIGNED_BLOCK_SIZE;
 		prev_block->next = current->next;
@@ -95,11 +145,8 @@ void coalesce(struct block_header *current)
 		if (current->next)
 			current->next->prev = prev_block;
 
-		current->prev_free = prev_block->prev_free;
-		if (prev_block->prev_free)
-			prev_block->prev_free->next_free = current;
-
-		// now current points to garbage inside the combined data section
+		// current is now garbage, we should return the merged block if needed
+		// but since we don't return anything, it's fine.
 	}
 }
 
@@ -115,30 +162,20 @@ void validate_list(void)
 			       walk->magic);
 			abort();
 		}
-
-		/* printf("Block %d: %p, size=%zu, free=%d, next=%p, prev=%p\n", count,
-		 */
-		/*        walk, walk->size, walk->is_free, walk->next, walk->prev); */
-
 		walk = walk->next;
 		count++;
-		// if (count > 10000)
-		// {
-		// 	printf("[ERROR] Circular list at block %p!\n", (void *)walk);
-		// 	abort();
-		// }
 	}
-	printf("List validated: %d blocks\n\n", count);
+	// printf("List validated: %d blocks\n\n", count);
 }
 
 void expandHeap(size_t min_size)
 {
-	// find the last block in the free list
+	// find the last block in the physical list
 	struct block_header *current = block_list;
 
 	if (!block_list)
 	{
-		block_list = getHeap(min_size);
+		initHeap();
 		return;
 	}
 
@@ -151,19 +188,16 @@ void expandHeap(size_t min_size)
 	current->next = new_page_block;
 	new_page_block->prev = current;
 
-	// update the next_free of current block
-	current->next_free = new_page_block;
+	// Add new block to free list
+	addToFreeList(new_page_block);
 
-	if (current->is_free)
-		new_page_block->prev_free = current;
-	else
-		new_page_block->prev_free = current->prev_free;
+	// Try to coalesce with the previous block (which is 'current')
+	// if 'current' was free, they will merge.
+	// We call coalesce on the *left* block essentially, or we can call it on
+	// new_page_block simpler to call on new_page_block and let it merge left.
+	coalesce(new_page_block);
 
-	// coalesce them if possible
-	if (current->is_free)
-		coalesce(current);
-
-	validate_list();
+	// validate_list();
 }
 
 void *_malloc(size_t length)
@@ -174,12 +208,12 @@ void *_malloc(size_t length)
 	// align the length
 	length = ALIGN(length);
 
-	struct block_header *current = block_list;
+	struct block_header *current = free_list;
 
 	while (current)
 	{
 		// skip if cant allocate in this block
-		if (current->size < length || !current->is_free)
+		if (current->size < length)
 		{
 			current = current->next_free;
 			continue;
@@ -188,62 +222,45 @@ void *_malloc(size_t length)
 		// allocate memory
 		current->is_free = false;
 
-		// unlink from teh free list
-		if (current->prev_free)
-			current->prev_free->next_free = current->next_free;
-		if (current->next_free)
-			current->next_free->prev_free = current->prev_free;
+		// IMPORTANT: Remove from free list first
+		removeFromFreeList(current);
 
-		// if there is more space for the next header, place it, or dont
+		// split block logic
 		size_t remaining = current->size - length;
 		if (remaining >= ALIGNED_BLOCK_SIZE + MIN_HEADER_SIZE)
 		{
 			// get pointer to data area (right after the header)
-			// temp + 1 skips a sizeof(block_header) as temp is a block_header*
 			void *data_start = (void *)(current + 1);
 
-			// skip length bytes and then create the new header there
+			// create the new header for the split part
 			struct block_header *new_block =
 			    (struct block_header *)((char *)data_start + length);
 
-			// FIX: update the next_free_block pointer of temp's parent
+			// Update physical links
 			new_block->next = current->next;
 			current->next = new_block;
 
-			// update the prev pointers
 			new_block->prev = current;
 			if (new_block->next)
 				new_block->next->prev = new_block;
 
-			// update next_free
-			new_block->next_free = current->next_free;
-			if (current->next_free)
-				current->next_free->prev_free = new_block;
-
-			// update prev_free
-			new_block->prev_free = current->prev_free;
-			if (current->prev_free)
-				current->prev_free->next_free = new_block;
-
+			// Setup new block
 			new_block->is_free = true;
 			new_block->magic = BLOCK_MAGIC;
-
 			new_block->size = remaining - ALIGNED_BLOCK_SIZE;
 			current->size = length;
+
+			// Add new block to free list
+			addToFreeList(new_block);
 		}
 
-		break;
+		// return pointer to data section (skip the header)
+		return (void *)(current + 1);
 	}
 
-	// if no space in current page, create a new page and then allocate
-	if (!current)
-	{
-		expandHeap(length);
-		return _malloc(length);
-	}
-
-	// return pointer to data section (skip the header)
-	return (void *)(current + 1);
+	// if no space found, expand heap and try again recursively
+	expandHeap(length);
+	return _malloc(length);
 }
 
 void _free(void *data)
@@ -267,19 +284,14 @@ void _free(void *data)
 
 	current->is_free = true;
 
-	// update next_free and prev_free
-	current->next_free = findNextFreeBlock(current);
-	current->prev_free = findPrevFreeBlock(current);
+	// Add to free list (LIFO)
+	addToFreeList(current);
 
-	// Update neighbors to point back to current
-	if (current->prev_free)
-		current->prev_free->next_free = current;
-	if (current->next_free)
-		current->next_free->prev_free = current;
-
+	// Coalesce physically
 	coalesce(current);
 }
 
+// ... Keep _calloc and _realloc as is, they just use _malloc/_free ...
 void *_calloc(size_t num, size_t size)
 {
 	size_t total = num * size;
@@ -351,30 +363,4 @@ void *_realloc(void *ptr, size_t size)
 	_free(ptr);
 
 	return new_ptr;
-}
-
-struct block_header *findNextFreeBlock(struct block_header *current)
-{
-	if (!current)
-		return NULL;
-
-	// walf forward until finding a free block
-	struct block_header *temp = current->next;
-	while (temp && !temp->is_free)
-		temp = temp->next;
-
-	return temp;
-}
-
-struct block_header *findPrevFreeBlock(struct block_header *current)
-{
-	if (!current)
-		return NULL;
-
-	// walf backward until finding a free block
-	struct block_header *temp = current->prev;
-	while (temp && !temp->is_free)
-		temp = temp->prev;
-
-	return temp;
 }
