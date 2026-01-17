@@ -39,7 +39,7 @@ This project is under active development. The following architectural enhancemen
 - [x] **Explicit Free List:** Maintain a separate list of free blocks to avoid scanning allocated memory.
 - [x] **Benchmark Suite:** Comprehensive performance comparison against `glibc`.
 - [ ] **Size Classes (Segregated Fits):** Implementation of size buckets (e.g., 16, 32, 64, 128, 256 bytes) to achieve O(1) allocation time for small objects.
-- [ ] **Thread Safety:** Integration of fine-grained mutex locking to support multi-threaded applications.
+- [x] **Thread Safety:** Integration of fine-grained mutex locking to support multi-threaded applications.
 
 ### 2. Memory Efficiency
 - [ ] **Fragmentation Metrics:** Real-time tracking of `total_allocated` vs `total_pages` to monitor heap health.
