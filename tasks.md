@@ -52,7 +52,12 @@
 - [x] Fix realloc - Actually implement shrinking properly
 
 
-- [ ] Add thread safety - Even a single mutex would be better than nothing
+- [x] Add thread safety - Even a single mutex would be better than nothing
+    - [x] Add global recursive mutex
+    - [x] Lock/Unlock in public APIs
+    - [x] Verify with `test_threads`
+
+
 - [ ] Implement size classes - Buckets for 16/32/64/128/256 bytes minimum
 - [ ] Return pages to OS - munmap when large blocks are freed
 - [ ] Write real tests - Memory leak detection, double-free catching, boundary testing

@@ -1,13 +1,23 @@
+// needed because apparantly PTHREAD_MUTEX_RECURSIVE is a specific extension
+// (not standard C99)
+#define _GNU_SOURCE
+
 #include "mem.h"
-#include "test.h"
 #include <stddef.h>
+#include <unistd.h>
+
+#include <pthread.h>
 #include <unistd.h>
 
 #define ALIGNMENT 8
 #define ALIGN(size) (((size) + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1))
 
-struct block_header *block_list = NULL;
-struct block_header *free_list = NULL;
+struct block_header *block_list = NULL; // Main list order by address
+struct block_header *free_list = NULL;  // Explicit list of free blocks (LIFO)
+
+// GLOBAL LOCK
+pthread_mutex_t global_malloc_lock = PTHREAD_MUTEX_INITIALIZER;
+bool lock_initialized = false;
 
 const int MIN_HEADER_SIZE = 8;
 const size_t BLOCK_MAGIC = 0xDEADBEEF;
@@ -94,6 +104,16 @@ struct block_header *getHeap(size_t size)
 
 void initHeap(void)
 {
+	if (!lock_initialized)
+	{
+		pthread_mutexattr_t attr;
+		pthread_mutexattr_init(&attr);
+		pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+		pthread_mutex_init(&global_malloc_lock, &attr);
+		pthread_mutexattr_destroy(&attr);
+		lock_initialized = true;
+	}
+
 	size_t page_size = sysconf(_SC_PAGESIZE);
 	struct block_header *header = getHeap(page_size);
 	block_list = header;
@@ -199,6 +219,10 @@ void expandHeap(size_t min_size)
 
 void *_malloc(size_t length)
 {
+	if (!lock_initialized)
+		initHeap();
+	pthread_mutex_lock(&global_malloc_lock);
+
 	if (!block_list)
 		initHeap();
 
@@ -252,18 +276,26 @@ void *_malloc(size_t length)
 		}
 
 		// return pointer to data section (skip the header)
+		pthread_mutex_unlock(&global_malloc_lock);
 		return (void *)(current + 1);
 	}
 
 	// if no space found, expand heap and try again recursively
 	expandHeap(length);
-	return _malloc(length);
+	void *ptr = _malloc(length);
+	pthread_mutex_unlock(&global_malloc_lock);
+	return ptr;
 }
 
 void _free(void *data)
 {
+	pthread_mutex_lock(&global_malloc_lock);
+
 	if (!data)
+	{
+		pthread_mutex_unlock(&global_malloc_lock);
 		return;
+	}
 
 	// 1. alignment check: Pointers from malloc are always aligned.
 	if (((size_t)data & (ALIGNMENT - 1)) != 0)
@@ -287,6 +319,7 @@ void _free(void *data)
 	if (current->is_free)
 	{
 		fprintf(stderr, "[WARN]: Double free detected\n");
+		pthread_mutex_unlock(&global_malloc_lock);
 		return;
 	}
 
@@ -297,16 +330,20 @@ void _free(void *data)
 
 	// Coalesce physically
 	coalesce(current);
+
+	pthread_mutex_unlock(&global_malloc_lock);
 }
 
 void *_calloc(size_t num, size_t size)
 {
+	pthread_mutex_lock(&global_malloc_lock);
 	size_t total = num * size;
 
 	// check for overflow
 	if (num != 0 && total / num != size)
 	{
 		fprintf(stderr, "[ERROR]: Integer overflow during calloc\n");
+		pthread_mutex_unlock(&global_malloc_lock);
 		return NULL;
 	}
 
@@ -316,27 +353,35 @@ void *_calloc(size_t num, size_t size)
 	if (!data)
 	{
 		fprintf(stderr, "[ERROR]: _malloc failed!\n");
+		pthread_mutex_unlock(&global_malloc_lock);
 		return NULL;
 	}
 
 	// set initial values to 0
 	memset(data, 0, total);
 
+	pthread_mutex_unlock(&global_malloc_lock);
 	return data;
 }
 
 void *_realloc(void *ptr, size_t size)
 {
+	pthread_mutex_lock(&global_malloc_lock);
 	size = ALIGN(size);
 
 	// explicitly allowed
 	if (!ptr)
-		return _malloc(size);
+	{
+		void *res = _malloc(size);
+		pthread_mutex_unlock(&global_malloc_lock);
+		return res;
+	}
 
 	// a valid pointer and a size == 0 is equivalent to free(ptr)
 	if (size == 0)
 	{
 		_free(ptr);
+		pthread_mutex_unlock(&global_malloc_lock);
 		return NULL;
 	}
 
@@ -347,6 +392,7 @@ void *_realloc(void *ptr, size_t size)
 	if (block->magic != BLOCK_MAGIC)
 	{
 		fprintf(stderr, "[ERROR]: Invalid pointer\n");
+		pthread_mutex_unlock(&global_malloc_lock);
 		return NULL;
 	}
 
@@ -383,6 +429,7 @@ void *_realloc(void *ptr, size_t size)
 			coalesce(new_block);
 		}
 
+		pthread_mutex_unlock(&global_malloc_lock);
 		return ptr;
 	}
 
@@ -391,6 +438,7 @@ void *_realloc(void *ptr, size_t size)
 	if (!new_ptr)
 	{
 		fprintf(stderr, "[ERROR]: _malloc failed!\n");
+		pthread_mutex_unlock(&global_malloc_lock);
 		return NULL;
 	}
 
@@ -401,5 +449,6 @@ void *_realloc(void *ptr, size_t size)
 	// free the original memory
 	_free(ptr);
 
+	pthread_mutex_unlock(&global_malloc_lock);
 	return new_ptr;
 }

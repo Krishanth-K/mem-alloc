@@ -112,8 +112,15 @@ New ideas new ideas.
 Instead of creating new pages and hoping they would be adjacent. im going to allocate huge spaces, and then
 create and link them
 
+Did a lot of stuff today:
+added explicit free list with first fit
+fixed realloc
+added good benchmarking
 
 ### Progress
 - Added multipage support
 - Added better benchmarking
+- Added explicit free list with first fit
+- Fixed realloc
+- Added good benchmarking
 
