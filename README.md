@@ -11,10 +11,17 @@ A high-throughput, low-latency memory allocator implementation in C, designed to
 
 ## 🚀 Current Architecture
 
-The allocator currently implements a baseline **first-fit strategy** with **doubly-linked lists** and **immediate coalescing**. It interacts directly with the kernel via `mmap` to manage virtual memory pages.
+The allocator implements a **First-Fit strategy** using an **Explicit Free List** (LIFO) for O(1) free and O(K) allocation performance. It maintains two parallel structures:
+ - **Physical List:** Doubly-linked list of all blocks (allocated & free) sorted by address for coalescing.
+ - **Logical Free List:** Singly-linked list of only free blocks for fast allocation.
+
+ It interacts directly with the kernel via `mmap` to manage virtual memory pages.
 
 ### Core Features
 - **Standard API Compliance:** Full implementation of `malloc`, `free`, `calloc`, and `realloc`.
+- **High Performance:**
+  - **Explicit Free List:** Allocations iterate only free blocks, not allocated ones.
+  - **O(1) Free:** Freed blocks are inserted at the head of the free list.
 - **Dynamic Heap Management:**
   - Automatic page acquisition via `mmap`.
   - Block splitting for efficient space utilization.
@@ -29,9 +36,10 @@ The allocator currently implements a baseline **first-fit strategy** with **doub
 This project is under active development. The following architectural enhancements are scheduled for upcoming releases:
 
 ### 1. Performance Optimization
+- [x] **Explicit Free List:** Maintain a separate list of free blocks to avoid scanning allocated memory.
+- [x] **Benchmark Suite:** Comprehensive performance comparison against `glibc`.
 - [ ] **Size Classes (Segregated Fits):** Implementation of size buckets (e.g., 16, 32, 64, 128, 256 bytes) to achieve O(1) allocation time for small objects.
-- [ ] **Thread Safety:** Integration of fine-grained mutex locking to support multi-threaded applications. Future work will explore lock-free structures.
-- [ ] **Benchmark Suite:** Comprehensive performance comparison against `glibc` (ptmalloc) handling 10M+ operations/second.
+- [ ] **Thread Safety:** Integration of fine-grained mutex locking to support multi-threaded applications.
 
 ### 2. Memory Efficiency
 - [ ] **Fragmentation Metrics:** Real-time tracking of `total_allocated` vs `total_pages` to monitor heap health.
@@ -39,6 +47,7 @@ This project is under active development. The following architectural enhancemen
 - [ ] **Optimized Reallocation:** In-place shrinking for `realloc` to avoid unnecessary data copying.
 
 ### 3. Reliability & Testing
+- [x] **Regression Testing:** Reproduction scripts for infinite loops and edge cases.
 - [ ] **Advanced Test Harness:** Automated detection for memory leaks, buffer overflows, and boundary violations.
 - [ ] **Fuzz Testing:** Stress testing the allocator with randomized allocation patterns to ensure stability under load.
 
