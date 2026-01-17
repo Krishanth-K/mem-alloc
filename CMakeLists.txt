@@ -15,7 +15,9 @@ add_compile_options(-Wall -Wextra -Wpedantic)
 
 # Collect sources
 file(GLOB SRC_FILES
-    src/*.c
+    src/test.c
+    src/main.c
+    src/mem.c
 )
 
 add_executable(mem_alloc ${SRC_FILES})

@@ -14,6 +14,7 @@
 
 extern const int MIN_HEADER_SIZE;
 extern const size_t BLOCK_MAGIC;
+extern const size_t ALIGNED_BLOCK_SIZE;
 
 // header with metadata for the memory block
 typedef struct block_header
